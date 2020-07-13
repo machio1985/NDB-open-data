@@ -1,5 +1,6 @@
 # library        -------
 library(tidyverse)
+library(stringi)
 library(rvest)
 library(readxl)
 
@@ -20,6 +21,7 @@ age_gender_fix<-function(x){
   x  %>% 
     gather(性年齢,値,contains("歳"),総計) %>% 
     mutate(値=round(値)) %>% 
+    filter(!is.na(値)) %>% 
     distinct_all()
 }
 
@@ -27,7 +29,8 @@ age_gender_fix<-function(x){
 area_fix<-function(x){
   x   %>% 
     gather(都道府県,値,c(総計,`01北海道`:`47沖縄県`)) %>% 
-    mutate(値=round(値)) %>% 
+    mutate(値=round(値))  %>% 
+    filter(!is.na(値)) %>% 
     distinct_all()
 }
 
@@ -68,7 +71,7 @@ dat<-list()
 #大きく都道府県と性年代のデータセットがあるが、ファイル名称などから判断つかないため、一旦強制的に取得した後にデータ整形する。
 for(i in 1:4){
   # 上記で取得したフォルダごとに読み込みを行う
-  year<-paste("data_v",i,sep="")
+  year<-paste("NDB_v",i,sep="")
   excel_list<-list.files(year)
   
   for(j in 1:length(excel_list)){
@@ -165,8 +168,9 @@ GenderAge_Treatment <-dat %>%
   age_gender_fix()
 
 GenderAge_Medicine  <-dat %>% 
-  select(年度,処方薬区分,contains("医薬品コード"),医薬品名,後発品区分,薬価,総計,contains("歳")) %>% 
+  select(年度,処方薬区分,薬価基準収載医薬品コード,医薬品名,薬価,総計,contains("歳")) %>% 
   filter(!is.na(医薬品名))  %>% 
+  mutate(医薬品名=stri_trans_nfkc(医薬品名)) %>% 
   age_gender_fix()
 
 GenderAge_Dentistry <-dat %>% 
@@ -180,8 +184,9 @@ Area_Treatment <-dat %>%
   area_fix()
 
 Area_Medicine  <-dat %>% 
-  select(年度,処方薬区分,contains("医薬品コード"),医薬品名,後発品区分,薬価,総計,c(`01北海道`:`47沖縄県`)) %>% 
+  select(年度,処方薬区分,薬価基準収載医薬品コード,医薬品名,薬価,総計,c(`01北海道`:`47沖縄県`)) %>% 
   filter(!is.na(医薬品名)) %>% 
+  mutate(医薬品名=stri_trans_nfkc(医薬品名)) %>% 
   area_fix()
 
 Area_Dentistry <-dat %>%
@@ -189,12 +194,39 @@ Area_Dentistry <-dat %>%
   filter(!is.na(傷病名)) %>% 
   area_fix()
   
+#rm(dat)
+
 
 # データ書き出し ---------------------------------------------------------------
 
-write.csv(Area_Dentistry,"summary_Area_Dentistry.csv",row.names = FALSE)
-write.csv(Area_Medicine,"summary_Area_Medicine.csv",row.names = FALSE)
-write.csv(Area_Treatment,"summary_Area_Treatment.csv",row.names = FALSE)
-write.csv(GenderAge_Dentistry,"summary_GenderAge_Dentistry.csv",row.names = FALSE)
-write.csv(GenderAge_Medicine,"summary_GenderAge_Medicine.csv",row.names = FALSE)
-write.csv(GenderAge_Treatment,"summary_GenderAge_Treatment.csv",row.names = FALSE)
+dir.create(paste(getwd(),"/output_csv",sep=""))
+
+write.csv(GenderAge_Treatment %>% filter(年度=="H26"),"output_csv/GenderAge_Treatment_H26.csv",row.names = FALSE)
+write.csv(GenderAge_Treatment %>% filter(年度=="H27"),"output_csv/GenderAge_Treatment_H27.csv",row.names = FALSE)
+write.csv(GenderAge_Treatment %>% filter(年度=="H28"),"output_csv/GenderAge_Treatment_H28.csv",row.names = FALSE)
+write.csv(GenderAge_Treatment %>% filter(年度=="H29"),"output_csv/GenderAge_Treatment_H29.csv",row.names = FALSE)
+
+write.csv(GenderAge_Medicine %>% filter(年度=="H26"),"output_csv/GenderAge_Medicine_H26.csv",row.names = FALSE)
+write.csv(GenderAge_Medicine %>% filter(年度=="H27"),"output_csv/GenderAge_Medicine_H27.csv",row.names = FALSE)
+write.csv(GenderAge_Medicine %>% filter(年度=="H28"),"output_csv/GenderAge_Medicine_H28.csv",row.names = FALSE)
+write.csv(GenderAge_Medicine %>% filter(年度=="H29"),"output_csv/GenderAge_Medicine_H29.csv",row.names = FALSE)
+
+write.csv(GenderAge_Dentistry %>% filter(年度=="H26"),"output_csv/GenderAge_Dentistry_H26.csv",row.names = FALSE)
+write.csv(GenderAge_Dentistry %>% filter(年度=="H27"),"output_csv/GenderAge_Dentistry_H27.csv",row.names = FALSE)
+write.csv(GenderAge_Dentistry %>% filter(年度=="H28"),"output_csv/GenderAge_Dentistry_H28.csv",row.names = FALSE)
+write.csv(GenderAge_Dentistry %>% filter(年度=="H29"),"output_csv/GenderAge_Dentistry_H29.csv",row.names = FALSE)
+
+write.csv(Area_Treatment %>% filter(年度=="H26"),"output_csv/Area_Treatment_H26.csv",row.names = FALSE)
+write.csv(Area_Treatment %>% filter(年度=="H27"),"output_csv/Area_Treatment_H27.csv",row.names = FALSE)
+write.csv(Area_Treatment %>% filter(年度=="H28"),"output_csv/Area_Treatment_H28.csv",row.names = FALSE)
+write.csv(Area_Treatment %>% filter(年度=="H29"),"output_csv/Area_Treatment_H29.csv",row.names = FALSE)
+
+write.csv(Area_Medicine %>% filter(年度=="H26"),"output_csv/Area_Medicine_H26.csv",row.names = FALSE)
+write.csv(Area_Medicine %>% filter(年度=="H27"),"output_csv/Area_Medicine_H27.csv",row.names = FALSE)
+write.csv(Area_Medicine %>% filter(年度=="H28"),"output_csv/Area_Medicine_H28.csv",row.names = FALSE)
+write.csv(Area_Medicine %>% filter(年度=="H29"),"output_csv/Area_Medicine_H29.csv",row.names = FALSE)
+
+write.csv(Area_Dentistry %>% filter(年度=="H26"),"output_csv/Area_Dentistry_H26.csv",row.names = FALSE)
+write.csv(Area_Dentistry %>% filter(年度=="H27"),"output_csv/Area_Dentistry_H27.csv",row.names = FALSE)
+write.csv(Area_Dentistry %>% filter(年度=="H28"),"output_csv/Area_Dentistry_H28.csv",row.names = FALSE)
+write.csv(Area_Dentistry %>% filter(年度=="H29"),"output_csv/Area_Dentistry_H29.csv",row.names = FALSE)
