@@ -16,23 +16,6 @@ read_mhlw<-function(x)(
     str_c("https://www.mhlw.go.jp",.)
 )
 
-#性年齢データの最後の成型
-age_gender_fix<-function(x){
-  x  %>% 
-    gather(性年齢,値,contains("歳"),総計) %>% 
-    mutate(値=round(値)) %>% 
-    filter(!is.na(値)) %>% 
-    distinct_all()
-}
-
-#都道府県データの最後の成型
-area_fix<-function(x){
-  x   %>% 
-    gather(都道府県,値,c(総計,`01北海道`:`47沖縄県`)) %>% 
-    mutate(値=round(値))  %>% 
-    filter(!is.na(値)) %>% 
-    distinct_all()
-}
 
 # データ取得     ----------------------------------------------------------------
 
@@ -41,27 +24,23 @@ urls<-list(
   "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000139390.html",#NDB1
   "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000177221.html",#NDB2
   "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000177221_00002.html",#NDB3
-  "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000177221_00003.html"#NDB4
+  "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000177221_00003.html",#NDB4
+  "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000177221_00008.html"#NDB5
 )
 
 #エクセルからデータを取得
-for(j in 1:4){
+for(j in 1:length(urls)){
   dir<-paste(getwd(),"/NDB_v",j,sep="")
   dir.create(dir)
   html_data <- read_mhlw(urls[[j]])
   
   for(i in 1:length(html_data)){
     download.file(url = html_data[i],
-                  destfile = str_c(file.path(dir),"/data",i,".xlsx"),
-                  method="wget")
+                  destfile = str_c(file.path(dir),"/data",i,".xlsx"))
     Sys.sleep(0.5) 
     
   }
 }
-
-
-
-
 
 # データ読み込み -----------------------------------------------------------------
 
@@ -69,10 +48,10 @@ rm(list=ls())
 dat<-list()
 
 #大きく都道府県と性年代のデータセットがあるが、ファイル名称などから判断つかないため、一旦強制的に取得した後にデータ整形する。
-for(i in 1:4){
+for(i in 1:5){
   # 上記で取得したフォルダごとに読み込みを行う
-  year<-paste("NDB_v",i,sep="")
-  excel_list<-list.files(year)
+  year <- paste("NDB_v",i,sep="")
+  excel_list <- list.files(year)
   
   for(j in 1:length(excel_list)){
     # 上記で取得したフォルダ内のexcelを一つずつ読み込む
@@ -102,7 +81,7 @@ for(i in 1:4){
           str_remove_all("性") %>% 
           str_replace_all("～","_")%>% 
           str_replace_all("-","_")
-          
+        
         #作成した列名称をデータフレームに適用する。
         #薬価列に読み込みミスがでるため、ここのみtext指定
         suppressMessages(tmp2<-read_excel(paste(year,"/",excel_list[j],sep=""),skip=3,sheet = k,col_types=ifelse(str_detect(c("薬価|点数"), col),"text","guess")))
@@ -118,7 +97,7 @@ for(i in 1:4){
         }
         
         #データを結合する。
-        dat<-bind_rows(dat,tmp)
+        dat <- bind_rows(dat,tmp)
       }
       #対象外のデータは読み込まない
       else{}
@@ -127,17 +106,18 @@ for(i in 1:4){
   }
 }
 
-rm(list=ls()[!ls() %in% c("dat","age_gender_fix","are_fix")])
+rm(list=ls()[!ls() %in% c("dat")])
 
 # データ整形     -------------------------------------------------------------------
 
-dat<-dat%>% 
+dat_fix <- dat%>% 
   mutate(
     年度=case_when(
       str_detect(sheet,"H26年04月") ~"H26",
       str_detect(sheet,"H27年04月") ~"H27",
       str_detect(sheet,"H28年04月") ~"H28",
-      str_detect(sheet,"H29年04月") ~"H29"),
+      str_detect(sheet,"H29年04月") ~"H29",
+      str_detect(sheet,"H30年04月") ~"H30"),
     外来入院区分=case_when(
       str_detect(sheet,"外来") ~"外来",
       str_detect(sheet,"入院") ~"入院",
@@ -159,74 +139,69 @@ dat<-dat%>%
       !is.na(加算) ~加算,
       !is.na(区分名称) ~区分名称,
       TRUE~NA_character_)
-    ) %>% 
+  ) %>% 
   mutate_at(vars(c(contains("歳"),点数,薬価,総計,`01北海道`:`47沖縄県`)),funs(as.numeric(.)))
 
-GenderAge_Treatment <-dat %>% 
+#性年齢データの最後の成型
+age_gender_fix<-function(x){
+  x  %>% 
+    gather(性年齢,値,contains("歳"),総計) %>% 
+    mutate(値=round(値)) %>% 
+    filter(!is.na(値)) %>% 
+    distinct_all()
+}
+
+#都道府県データの最後の成型
+prefecture_fix<-function(x){
+  x   %>% 
+    gather(都道府県,値,c(総計,`01北海道`:`47沖縄県`)) %>% 
+    mutate(値=round(値))  %>% 
+    filter(!is.na(値)) %>% 
+    distinct_all()
+}
+
+GenderAge_Treatment <- dat_fix %>% 
   select(年度,外来入院区分,分類_加算,contains("診療行為"),点数,総計,contains("歳")) %>%
   filter(!is.na(診療行為)) %>% 
   age_gender_fix()
 
-GenderAge_Medicine  <-dat %>% 
+GenderAge_Medicine  <- dat_fix %>% 
   select(年度,処方薬区分,薬価基準収載医薬品コード,医薬品名,薬価,総計,contains("歳")) %>% 
   filter(!is.na(医薬品名))  %>% 
   mutate(医薬品名=stri_trans_nfkc(医薬品名)) %>% 
   age_gender_fix()
 
-GenderAge_Dentistry <-dat %>% 
+GenderAge_Dentistry <- dat_fix %>% 
   select(年度,contains("傷病"),総計,contains("歳")) %>%
   filter(!is.na(傷病名)) %>% 
   age_gender_fix()
 
-Area_Treatment <-dat %>% 
+Prefecture_Treatment <- dat_fix %>% 
   select(年度,外来入院区分,分類_加算,contains("診療行為"),点数,総計,c(`01北海道`:`47沖縄県`)) %>%
   filter(!is.na(診療行為)) %>% 
-  area_fix()
+  prefecture_fix()
 
-Area_Medicine  <-dat %>% 
+Prefecture_Medicine <- dat_fix %>% 
   select(年度,処方薬区分,薬価基準収載医薬品コード,医薬品名,薬価,総計,c(`01北海道`:`47沖縄県`)) %>% 
   filter(!is.na(医薬品名)) %>% 
   mutate(医薬品名=stri_trans_nfkc(医薬品名)) %>% 
-  area_fix()
+  prefecture_fix()
 
-Area_Dentistry <-dat %>%
+Prefecture_Dentistry<- dat_fix %>%
   select(年度,contains("傷病"),総計,c(`01北海道`:`47沖縄県`)) %>% 
   filter(!is.na(傷病名)) %>% 
-  area_fix()
-  
-#rm(dat)
+  prefecture_fix()
 
+# 注意
+# 各都道府県や各年代の合計値が総計と一致しないことがあるため、総計も含めている。
 
 # データ書き出し ---------------------------------------------------------------
 
 dir.create(paste(getwd(),"/output_csv",sep=""))
 
-write.csv(GenderAge_Treatment %>% filter(年度=="H26"),"output_csv/GenderAge_Treatment_H26.csv",row.names = FALSE)
-write.csv(GenderAge_Treatment %>% filter(年度=="H27"),"output_csv/GenderAge_Treatment_H27.csv",row.names = FALSE)
-write.csv(GenderAge_Treatment %>% filter(年度=="H28"),"output_csv/GenderAge_Treatment_H28.csv",row.names = FALSE)
-write.csv(GenderAge_Treatment %>% filter(年度=="H29"),"output_csv/GenderAge_Treatment_H29.csv",row.names = FALSE)
-
-write.csv(GenderAge_Medicine %>% filter(年度=="H26"),"output_csv/GenderAge_Medicine_H26.csv",row.names = FALSE)
-write.csv(GenderAge_Medicine %>% filter(年度=="H27"),"output_csv/GenderAge_Medicine_H27.csv",row.names = FALSE)
-write.csv(GenderAge_Medicine %>% filter(年度=="H28"),"output_csv/GenderAge_Medicine_H28.csv",row.names = FALSE)
-write.csv(GenderAge_Medicine %>% filter(年度=="H29"),"output_csv/GenderAge_Medicine_H29.csv",row.names = FALSE)
-
-write.csv(GenderAge_Dentistry %>% filter(年度=="H26"),"output_csv/GenderAge_Dentistry_H26.csv",row.names = FALSE)
-write.csv(GenderAge_Dentistry %>% filter(年度=="H27"),"output_csv/GenderAge_Dentistry_H27.csv",row.names = FALSE)
-write.csv(GenderAge_Dentistry %>% filter(年度=="H28"),"output_csv/GenderAge_Dentistry_H28.csv",row.names = FALSE)
-write.csv(GenderAge_Dentistry %>% filter(年度=="H29"),"output_csv/GenderAge_Dentistry_H29.csv",row.names = FALSE)
-
-write.csv(Area_Treatment %>% filter(年度=="H26"),"output_csv/Area_Treatment_H26.csv",row.names = FALSE)
-write.csv(Area_Treatment %>% filter(年度=="H27"),"output_csv/Area_Treatment_H27.csv",row.names = FALSE)
-write.csv(Area_Treatment %>% filter(年度=="H28"),"output_csv/Area_Treatment_H28.csv",row.names = FALSE)
-write.csv(Area_Treatment %>% filter(年度=="H29"),"output_csv/Area_Treatment_H29.csv",row.names = FALSE)
-
-write.csv(Area_Medicine %>% filter(年度=="H26"),"output_csv/Area_Medicine_H26.csv",row.names = FALSE)
-write.csv(Area_Medicine %>% filter(年度=="H27"),"output_csv/Area_Medicine_H27.csv",row.names = FALSE)
-write.csv(Area_Medicine %>% filter(年度=="H28"),"output_csv/Area_Medicine_H28.csv",row.names = FALSE)
-write.csv(Area_Medicine %>% filter(年度=="H29"),"output_csv/Area_Medicine_H29.csv",row.names = FALSE)
-
-write.csv(Area_Dentistry %>% filter(年度=="H26"),"output_csv/Area_Dentistry_H26.csv",row.names = FALSE)
-write.csv(Area_Dentistry %>% filter(年度=="H27"),"output_csv/Area_Dentistry_H27.csv",row.names = FALSE)
-write.csv(Area_Dentistry %>% filter(年度=="H28"),"output_csv/Area_Dentistry_H28.csv",row.names = FALSE)
-write.csv(Area_Dentistry %>% filter(年度=="H29"),"output_csv/Area_Dentistry_H29.csv",row.names = FALSE)
+write.csv(GenderAge_Treatment,"output_csv/GenderAge_Treatment.csv",row.names = FALSE)
+write.csv(GenderAge_Medicine,"output_csv/GenderAge_Medicine.csv",row.names = FALSE)
+write.csv(GenderAge_Dentistry ,"output_csv/GenderAge_Dentistry.csv",row.names = FALSE)
+write.csv(Prefecture_Treatment,"output_csv/Prefecture_Treatment.csv",row.names = FALSE)
+write.csv(Prefecture_Medicine,"output_csv/Prefecture_Medicine.csv",row.names = FALSE)
+write.csv(Prefecture_Dentistry,"output_csv/Prefecture_Dentistry.csv",row.names = FALSE)
