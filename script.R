@@ -37,7 +37,7 @@ for(j in 1:length(urls)){
   for(i in 1:length(html_data)){
     download.file(url = html_data[i],
                   destfile = str_c(file.path(dir),"/data",i,".xlsx"))
-    Sys.sleep(0.5) 
+    Sys.sleep(10) 
     
   }
 }
